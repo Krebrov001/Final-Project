@@ -332,12 +332,6 @@ fn main() {
         output_file_handler = None;
     }
     
-    /*
-    if my_rank == 0 {
-        output_file_handler.unwrap().write(b"Yes! It works!");
-    }
-    */
-    
     // Open up the timing file.
     if my_rank == 0 {
         // This code creates the timing filename based on the input filename.
@@ -445,19 +439,19 @@ fn main() {
     }
     
     
-    let mut current_chunk : Option<&Vec<u8>>;
-    let mut former_chunk  : Option<&Vec<u8>>;
+    let mut current_chunk : &mut [u8];
+    let mut former_chunk  : &[u8];
         
-    let mut row_above : Option<&Vec<u8>>;
-    let mut row_below : Option<&Vec<u8>>;
+    let mut row_above : Option<&[u8]>;
+    let mut row_below : Option<&[u8]>;
     
     for generation in 0..num_generations {
         if (generation % 2 == 0) {
-            current_chunk = Some(&chunk2);
-            former_chunk = Some(&chunk);
+            current_chunk = &mut chunk2;
+            former_chunk = &chunk;
         } else {
-            current_chunk = Some(&chunk);
-            former_chunk = Some(&chunk2);
+            current_chunk = &mut chunk;
+            former_chunk = &chunk2;
         }
         
         /* The halo arrays get updated each iteration. */
@@ -469,7 +463,7 @@ fn main() {
                     let start : usize = ((num_rows-1) * grid_size) as usize;
                     let end   : usize = ((num_rows-1) * grid_size + grid_size) as usize;
                     // Send the bottom row in the chunk to the rank directly below you.
-                    Some(world.process_at_rank(my_rank+1).immediate_send(scope, &former_chunk.unwrap()[start..end]))
+                    Some(world.process_at_rank(my_rank+1).immediate_send(scope, &former_chunk[start..end]))
                 }
                 None => { None }
             };
@@ -480,7 +474,7 @@ fn main() {
                     let start : usize = 0;
                     let end   : usize = grid_size as usize;
                     // Send the top row in the chunk to the rank directly above you.
-                    Some(world.process_at_rank(my_rank-1).immediate_send(scope, &former_chunk.unwrap()[start..end]))
+                    Some(world.process_at_rank(my_rank-1).immediate_send(scope, &former_chunk[start..end]))
                 }
                 None => { None }
             };
@@ -533,7 +527,7 @@ fn main() {
                 } else {
                     let start : usize = ((row-1) * grid_size) as usize;
                     let end   : usize = ((row-1) * grid_size + grid_size) as usize;
-                    row_above = Some(&former_chunk.unwrap()[start..end].to_vec());
+                    row_above = Some(&former_chunk[start..end]);
                 }
                 // determine what the row below should be
                 if row == num_rows-1 {
@@ -545,7 +539,7 @@ fn main() {
                 } else {
                     let start : usize = ((row+1) * grid_size) as usize;
                     let end   : usize = ((row+1) * grid_size + grid_size) as usize;
-                    row_below = Some(&former_chunk.unwrap()[start..end].to_vec());
+                    row_below = Some(&former_chunk[start..end]);
                 }
             } else if my_rank == comm_size-1 {  // bottom rank
                 // determine what the row above should be
@@ -558,7 +552,7 @@ fn main() {
                 } else {
                     let start : usize = ((row-1) * grid_size) as usize;
                     let end   : usize = ((row-1) * grid_size + grid_size) as usize;
-                    row_above = Some(&former_chunk.unwrap()[start..end].to_vec());
+                    row_above = Some(&former_chunk[start..end]);
                 }
                 // determine what the row below should be
                 if row == num_rows-1 {
@@ -566,7 +560,7 @@ fn main() {
                 } else {
                     let start : usize = ((row+1) * grid_size) as usize;
                     let end   : usize = ((row+1) * grid_size + grid_size) as usize;
-                    row_below = Some(&former_chunk.unwrap()[start..end].to_vec());
+                    row_below = Some(&former_chunk[start..end]);
                 }
             } else {  // middle rank
                 // determine what the row above should be
@@ -579,7 +573,7 @@ fn main() {
                 } else {
                     let start : usize = ((row-1) * grid_size) as usize;
                     let end   : usize = ((row-1) * grid_size + grid_size) as usize;
-                    row_above = Some(&former_chunk.unwrap()[start..end].to_vec());
+                    row_above = Some(&former_chunk[start..end]);
                 }
                 // determine what the row below should be
                 if row == num_rows-1 {
@@ -591,13 +585,13 @@ fn main() {
                 } else {
                     let start : usize = ((row+1) * grid_size) as usize;
                     let end   : usize = ((row+1) * grid_size + grid_size) as usize;
-                    row_below = Some(&former_chunk.unwrap()[start..end].to_vec());
+                    row_below = Some(&former_chunk[start..end]);
                 }
             }
             
             let mut neighbors : u32 = 0;
             // left 
-            neighbors += (former_chunk.unwrap()[(row * grid_size + 1) as usize]) as u32;
+            neighbors += (former_chunk[(row * grid_size + 1) as usize]) as u32;
             match &row_above {
                 Some(row_above_vector) => {
                     neighbors += (row_above_vector[0] + row_above_vector[1]) as u32;
@@ -610,13 +604,79 @@ fn main() {
                 },
                 None => {}
             };
-            current_chunk.unwrap()[(row * grid_size) as usize] = setCell(former_chunk.unwrap()[(row * grid_size) as usize], neighbors);
+            current_chunk[(row * grid_size) as usize] = setCell(former_chunk[(row * grid_size) as usize], neighbors);
+            
+            // middle
+            for col in 1..grid_size - 1 {
+                neighbors = (former_chunk[(row * grid_size + col-1) as usize] + former_chunk[(row * grid_size + col+1) as usize]) as u32;
+                match &row_above {
+                    Some(row_above_vector) => {
+                        neighbors += (row_above_vector[(col-1) as usize] + row_above_vector[col as usize] + row_above_vector[(col+1) as usize]) as u32;
+                    },
+                    None => {}
+                };
+                match &row_below {
+                    Some(row_below_vector) => {
+                        neighbors += (row_below_vector[(col-1) as usize] + row_below_vector[col as usize] + row_below_vector[(col+1) as usize]) as u32;
+                    },
+                    None => {}
+                };
+                current_chunk[(row * grid_size + col) as usize] = setCell(former_chunk[(row * grid_size + col) as usize], neighbors);
+            }
+            
+            // right
+            neighbors = (former_chunk[(row * grid_size + grid_size-2) as usize]) as u32;
+            match &row_above {
+                Some(row_above_vector) => {
+                    neighbors += (row_above_vector[(grid_size-2) as usize] + row_above_vector[(grid_size-1) as usize]) as u32;
+                },
+                None => {}
+            };
+            match &row_below {
+                Some(row_below_vector) => {
+                    neighbors += (row_below_vector[(grid_size-2) as usize] + row_below_vector[(grid_size-1) as usize]) as u32;
+                },
+                None => {}
+            };
+            current_chunk[(row * grid_size + grid_size-1) as usize] = setCell(former_chunk[(row * grid_size + grid_size-1) as usize], neighbors);
+            
+        }
+        
+        // Print the current_map if this is an output generation.
+        if ((generation + 1) % output_generations == 0) {
+            // Gather all the chunks from each rank into the grid in rank 0.
+            if my_rank == 0 {
+                world.process_at_rank(0).gather_into_root(current_chunk, grid.as_mut_slice());
+            } else {
+                world.process_at_rank(0).gather_into(current_chunk);
+            }
+            
+            if my_rank == 0 {
+                match &mut output_file_handler {
+                    Some(output_writer) => {
+                        let mut output_text : String = "Generation ".to_string();
+                        output_text.push_str(&(generation + 1).to_string());
+                        output_text.push(':');
+                        output_text.push('\n');
+                        output_writer.write(output_text.as_bytes());
+                        output_writer.flush();
+                        
+                        for row in 0..grid_size {
+                            for col in 0..grid_size {
+                                let mut byte : Vec<u8> = [ grid[(row * grid_size + col) as usize] ].to_vec();
+                                byte[0] += '0' as u8;  // convert from byte to character representation
+                                output_writer.write(&byte);
+                            }
+                            output_writer.write(b"\n");
+                            output_writer.flush();
+                        }
+                    },
+                    None => {}
+                };
+            }
         }
         
     }
-    
-    
-    
     
     // Stop the timer in each of the ranks.
     local_finish = mpi::time();

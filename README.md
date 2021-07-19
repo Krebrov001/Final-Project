@@ -1,1 +1,3 @@
-# Final-Project
+# MPI-Project
+
+This was a pair programming project that I worked on with my friend Ethan Robinson in our senior year of University. This project was an exercise of using MPI in multiple programming languages. This project consisted of two parts, two separate individual assignments: Matrix Multiplication and Game of Life. Each student in the pair had to choose which assignment they want to work on for this project. I chose Game of Life, and Ethan chose Matrix Multiplication. These two parts of the project were each worked on individually, only they were supposed to be submitted together. Other than making sure that we both completed our individual part by the due date, there was really no cooperation between us because of the nature of this project.
